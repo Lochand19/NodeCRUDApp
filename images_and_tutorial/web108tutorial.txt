@@ -1,0 +1,250 @@
+
+# Node.js CRUD Application Tutorial
+### Lochlan Dorman
+
+## 1. Create Directory and Initialize
+Type the following commands in order into your terminal
+> mkdir CRUDapp
+
+Navigate to the CRUD app directory
+> cd CRUDapp
+
+Initialize the directory and add the dependencies
+> npm init
+> npm install express mongoose body-parser cors
+
+## 2. Set up the Server
+Create a file in the root directory called **server.js**
+Add the following code to that file 
+> const express = require("express");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const app = express();
+
+>var corsOptions = {
+  origin: "http://localhost:3001"
+};
+
+>app.use(cors(corsOptions));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+>const db = require("./app/models");
+db.mongoose
+  .connect(db.url, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+  })
+  .then(() => {
+    console.log("Connected to the database!");
+  })
+  .catch(err => {
+    console.log("Cannot connect to the database!", err);
+    process.exit();
+  });
+
+>require("./app/routes/tutorial.routes")(app);
+
+>const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}.`);
+});
+
+## 3. Database configuration
+Create an app folder and a config folder inside
+> mkdir app
+> cd app
+> mkdir config
+
+Create a file inside the config folder called db.config.js
+> touch db.config.js
+
+Inside the **db.config.js file** add the following code
+>module.exports = {
+>//this can also be the URL of your hosted web server
+  url: "mongodb://localhost:27017/CRUDapp"
+};
+
+## 4. Mongoose
+Create a folder inside the app folder called models
+> mkdir models
+
+Create a file called **index.js** 
+>touch index.js
+
+Add the following code to **index.js**
+>const dbConfig = require("../config/db.config.js");
+
+>const mongoose = require("mongoose");
+mongoose.Promise = global.Promise;
+
+>const db = {};
+db.mongoose = mongoose;
+db.url = dbConfig.url;
+db.tutorials = require("./tutorial.model.js")(mongoose);
+
+>module.exports = db;
+
+## 5. Use the connect method
+Add the following code in to your **server.js** file before the line *const PORT = process.env.PORT || 3000;*
+>const db = require("./app/models");
+db.mongoose
+  .connect(db.url, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+  })
+  .then(() => {
+    console.log("Connected to the database!");
+  })
+  .catch(err => {
+    console.log("Cannot connect to the database!", err);
+    process.exit();
+  });
+
+## 5. Create a mongoose model
+Inside the models folder, create a file called **tutorial.model.js**
+>cd models
+>touch tutorial.model.js
+
+Add the following code to **tutorial.model.js**
+>module.exports = mongoose => {
+  const Tutorial = mongoose.model(
+    "tutorial",
+    mongoose.Schema(
+      {
+        title: String,
+        description: String,
+        published: Boolean
+      },
+      { timestamps: true }
+    )
+  );
+return Tutorial;
+};
+
+## 6. Controller
+Create a controllers folder inside the app folder
+>cd app
+>mkdir controllers
+
+Create a file called **tutorial.controller.js**
+>touch tutorial.controller.js
+
+Add the following code to **tutorial.controller.js**
+>const db = require("../models");
+const Tutorial = db.tutorials;
+
+>// CREATE
+exports.create = (req, res) => {
+  if (!req.body.title) {
+    res.status(400).send({ message: "Content can not be empty!" });
+    return;
+  }
+  const tutorial = new Tutorial({
+    title: req.body.title,
+    description: req.body.description,
+    published: req.body.published ? req.body.published : false
+  });
+  tutorial
+    .save(tutorial)
+    .then(data => {
+      res.send(data);
+    })
+    .catch(err => {
+      res.status(500).send({
+        message:
+          err.message || "Some error occurred while creating the Tutorial."
+      });
+    });
+};
+
+>// READ ALL
+exports.findAll = (req, res) => {
+  const title = req.query.title;
+  var condition = title ? { title: { $regex: new RegExp(title), $options: "i" } } : {};
+  Tutorial.find(condition)
+    .then(data => {
+      res.send(data);
+    })
+    .catch(err => {
+      res.status(500).send({
+        message:
+          err.message || "Some error occurred while retrieving tutorials."
+      });
+    });
+};
+
+>// UPDATE BY ID
+exports.update = (req, res) => {
+  if (!req.body) {
+    return res.status(400).send({
+      message: "Data to update can not be empty!"
+    });
+  }
+  const id = req.params.id;
+  Tutorial.findByIdAndUpdate(id, req.body, { useFindAndModify: false })
+    .then(data => {
+      if (!data) {
+        res.status(404).send({
+          message: `Cannot update Tutorial with id=${id}.`
+        });
+      } else res.send({ message: "Tutorial was updated successfully." });
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: "Error updating Tutorial with id=" + id
+      });
+    });
+};
+
+>// DELETE BY ID
+exports.delete = (req, res) => {
+  const id = req.params.id;
+  Tutorial.findByIdAndRemove(id)
+    .then(data => {
+      if (!data) {
+        res.status(404).send({
+          message: `Cannot delete Tutorial with id=${id}.`
+        });
+      } else {
+        res.send({
+          message: "Tutorial was deleted successfully!"
+        });
+      }
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: "Could not delete Tutorial with id=" + id
+      });
+    });
+};
+
+## 7. Routing
+Create a routes folder in the app folder
+>cd app
+>mkdir routes
+
+Create a file called **tutorial.routes.js**
+>touch tutorial.routes.js
+
+Add the following code to the **tutorial.routes.js** file
+>module.exports = app => {
+  const tutorials = require("../controllers/tutorial.controller.js");
+  const router = require("express").Router();
+
+  >// Create
+  router.post("/", tutorials.create);
+
+  >// Retrieve all
+  router.get("/", tutorials.findAll);
+
+  >// Update
+  router.put("/:id", tutorials.update);
+
+  >// Delete
+  router.delete("/:id", tutorials.delete);
+
+ > app.use('/api/tutorials', router);
+};
+
+## 8. You are now ready to test the API, refer to the screenshots of postman to continue.
